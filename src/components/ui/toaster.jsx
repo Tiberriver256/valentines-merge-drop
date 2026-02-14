@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Toast,
@@ -10,18 +11,31 @@ import {
 
 export function Toaster() {
   const { toasts, dismiss } = useToast();
+  const visibleToasts = toasts.filter((toast) => toast.open !== false);
+  const viewportRef = useRef(null);
+
+  useEffect(() => {
+    if (visibleToasts.length === 0) return;
+
+    const handleOutsideDismiss = (event) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      if (!viewport.contains(event.target)) {
+        dismiss();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideDismiss, true);
+    document.addEventListener("touchstart", handleOutsideDismiss, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideDismiss, true);
+      document.removeEventListener("touchstart", handleOutsideDismiss, true);
+    };
+  }, [dismiss, visibleToasts.length]);
 
   return (
     <ToastProvider>
-      {toasts.length > 0 && (
-        <button
-          type="button"
-          aria-label="Dismiss notifications"
-          className="fixed inset-0 z-[90] cursor-default bg-transparent"
-          onClick={() => dismiss()}
-        />
-      )}
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {visibleToasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
@@ -35,7 +49,7 @@ export function Toaster() {
           </Toast>
         );
       })}
-      <ToastViewport />
+      <ToastViewport ref={viewportRef} />
     </ToastProvider>
   );
 } 
