@@ -13,6 +13,74 @@ const DROP_SOUND_FILES = [
 const DROP_SOUND_PATHS = DROP_SOUND_FILES.map(
   (file) => `${import.meta.env.BASE_URL}audio/drops/${file}`
 );
+const MUSIC_GAIN_SCALE = 0.35;
+const SFX_GAIN_SCALE = 1.8;
+
+function AudioMixerControls({
+  musicVolume,
+  sfxVolume,
+  onMusicChange,
+  onSfxChange,
+}) {
+  const [musicPercent, setMusicPercent] = useState(
+    Math.round(musicVolume * 100)
+  );
+  const [sfxPercent, setSfxPercent] = useState(Math.round(sfxVolume * 100));
+
+  return (
+    <div className="mt-2 space-y-4">
+      <div>
+        <div className="mb-1 flex items-center justify-between text-xs font-semibold">
+          <span>Background Music</span>
+          <span>{musicPercent}%</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={musicPercent}
+          onChange={(e) => {
+            const percent = Number(e.target.value);
+            setMusicPercent(percent);
+            onMusicChange(percent / 100);
+          }}
+          aria-label="Background music volume"
+          className="w-full"
+        />
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+          <span>Muted</span>
+          <span>Full</span>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between text-xs font-semibold">
+          <span>Sound Effects</span>
+          <span>{sfxPercent}%</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={sfxPercent}
+          onChange={(e) => {
+            const percent = Number(e.target.value);
+            setSfxPercent(percent);
+            onSfxChange(percent / 100);
+          }}
+          aria-label="Sound effects volume"
+          className="w-full"
+        />
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+          <span>Muted</span>
+          <span>Full</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Shape sizes with your relationship photos - each level gets bigger!
 const SHAPES = [
@@ -147,7 +215,7 @@ export default function Game() {
     if (sfxVolume <= 0 || dropSoundsRef.current.length === 0) return;
     const idx = Math.floor(Math.random() * dropSoundsRef.current.length);
     const sound = dropSoundsRef.current[idx].cloneNode();
-    sound.volume = sfxVolume;
+    sound.volume = Math.min(1, sfxVolume * SFX_GAIN_SCALE);
     sound.play().catch(() => {});
   }, [sfxVolume]);
 
@@ -525,7 +593,7 @@ export default function Game() {
 
   useEffect(() => {
     if (!audioRef.current) return;
-    audioRef.current.volume = musicVolume;
+    audioRef.current.volume = musicVolume * MUSIC_GAIN_SCALE;
     if (musicVolume <= 0) {
       audioRef.current.pause();
       return;
@@ -568,32 +636,12 @@ export default function Game() {
     toast({
       title: "Audio Mix",
       description: (
-        <div className="mt-2 space-y-3">
-          <label className="block text-xs text-white/80">
-            Background Music
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              defaultValue={Math.round(musicVolume * 100)}
-              onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
-              className="mt-2 w-full"
-            />
-          </label>
-          <label className="block text-xs text-white/80">
-            Sound Effects
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              defaultValue={Math.round(sfxVolume * 100)}
-              onChange={(e) => setSfxVolume(Number(e.target.value) / 100)}
-              className="mt-2 w-full"
-            />
-          </label>
-        </div>
+        <AudioMixerControls
+          musicVolume={musicVolume}
+          sfxVolume={sfxVolume}
+          onMusicChange={setMusicVolume}
+          onSfxChange={setSfxVolume}
+        />
       ),
     });
   };
