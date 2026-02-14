@@ -4,6 +4,15 @@ import { RotateCcw, Maximize, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const GAME_ASSET_BASE = `${import.meta.env.BASE_URL}assets/game`;
+const DROP_SOUND_FILES = [
+  "drop-soft-01.m4a",
+  "drop-soft-02.m4a",
+  "drop-soft-03.m4a",
+  "drop-soft-04.m4a",
+];
+const DROP_SOUND_PATHS = DROP_SOUND_FILES.map(
+  (file) => `${import.meta.env.BASE_URL}audio/drops/${file}`
+);
 
 // Shape sizes with your relationship photos - each level gets bigger!
 const SHAPES = [
@@ -101,6 +110,7 @@ export default function Game() {
   const gameLoopRef = useRef(null);
   const lastDropRef = useRef(0);
   const audioRef = useRef(null);
+  const dropSoundsRef = useRef([]);
   const audioStartedRef = useRef(false);
   const mergeTimeoutsRef = useRef([]);
   const dropCooldownTimeoutRef = useRef(null);
@@ -131,6 +141,14 @@ export default function Game() {
     setMergeEffects([]);
   }, []);
 
+  const playDropSound = useCallback(() => {
+    if (isMuted || dropSoundsRef.current.length === 0) return;
+    const idx = Math.floor(Math.random() * dropSoundsRef.current.length);
+    const sound = dropSoundsRef.current[idx].cloneNode();
+    sound.volume = 0.7;
+    sound.play().catch(() => {});
+  }, [isMuted]);
+
   // Drop shape
   const dropShape = useCallback(
     (x) => {
@@ -160,6 +178,7 @@ export default function Game() {
       };
 
       shapesRef.current.push(newShape);
+      playDropSound();
       setCurrentShape(nextShape);
       setNextShape(getRandomShape());
       setCanDrop(false);
@@ -171,7 +190,7 @@ export default function Game() {
         dropCooldownTimeoutRef.current = null;
       }, 500);
     },
-    [canDrop, currentShape, gameOver, nextShape]
+    [canDrop, currentShape, gameOver, nextShape, playDropSound]
   );
 
   // Check collision between two circles
@@ -475,6 +494,11 @@ export default function Game() {
     audioRef.current = new Audio(`${GAME_ASSET_BASE}/background-music.mp3`);
     audioRef.current.loop = true;
     audioRef.current.volume = 0.3;
+    dropSoundsRef.current = DROP_SOUND_PATHS.map((src) => {
+      const sound = new Audio(src);
+      sound.preload = "auto";
+      return sound;
+    });
 
     // Listen for fullscreen changes
     const handleFullscreenChange = () => {
@@ -489,6 +513,11 @@ export default function Game() {
         audioRef.current.src = "";
         audioRef.current = null;
       }
+      dropSoundsRef.current.forEach((sound) => {
+        sound.pause();
+        sound.src = "";
+      });
+      dropSoundsRef.current = [];
     };
   }, []);
 
