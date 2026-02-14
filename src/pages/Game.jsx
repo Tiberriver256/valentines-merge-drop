@@ -102,7 +102,9 @@ export default function Game() {
   const audioRef = useRef(null);
   const audioStartedRef = useRef(false);
   const mergeTimeoutsRef = useRef([]);
+  const dropCooldownTimeoutRef = useRef(null);
   const scoreRef = useRef(0);
+  const dangerLineStartRef = useRef(null);
 
   // Generate next shape (only first 4 types can spawn)
   const getRandomShape = () => Math.floor(Math.random() * 4);
@@ -111,8 +113,14 @@ export default function Game() {
   const resetGame = useCallback(() => {
     mergeTimeoutsRef.current.forEach(clearTimeout);
     mergeTimeoutsRef.current = [];
+    if (dropCooldownTimeoutRef.current) {
+      clearTimeout(dropCooldownTimeoutRef.current);
+      dropCooldownTimeoutRef.current = null;
+    }
     shapesRef.current = [];
     scoreRef.current = 0;
+    lastDropRef.current = 0;
+    dangerLineStartRef.current = null;
     setShapes([]);
     setScore(0);
     setGameOver(false);
@@ -152,7 +160,13 @@ export default function Game() {
       shapesRef.current.push(newShape);
       setNextShape(getRandomShape());
       setCanDrop(false);
-      setTimeout(() => setCanDrop(true), 500);
+      if (dropCooldownTimeoutRef.current) {
+        clearTimeout(dropCooldownTimeoutRef.current);
+      }
+      dropCooldownTimeoutRef.current = setTimeout(() => {
+        setCanDrop(true);
+        dropCooldownTimeoutRef.current = null;
+      }, 500);
     },
     [canDrop, gameOver, nextShape]
   );
@@ -178,8 +192,15 @@ export default function Game() {
     const nx = dx / dist;
     const ny = dy / dist;
 
-    // If both locked, do nothing
-    if (a.locked && b.locked) return;
+    // Keep locked overlaps from persisting forever.
+    if (a.locked && b.locked) {
+      const half = overlap / 2;
+      a.x -= half * nx;
+      a.y -= half * ny;
+      b.x += half * nx;
+      b.y += half * ny;
+      return;
+    }
 
     // Separate shapes proportionally to inverse mass (locked shapes behave like infinite mass)
     const invMassA = a.locked ? 0 : 1;
@@ -381,11 +402,25 @@ export default function Game() {
       // Check game over - if shapes cross the danger line and settle
       if (shapesForChecks.length > 3) {
         const shapesAboveLine = shapesForChecks.filter(
-          (s) =>
-            s.y - s.radius < DANGER_LINE &&
-            (s.locked || (Math.abs(s.vy) < 0.5 && Math.abs(s.vx) < 0.5))
+          (s) => s.y - s.radius < DANGER_LINE
         );
+
         if (shapesAboveLine.length >= 2) {
+          if (dangerLineStartRef.current === null) {
+            dangerLineStartRef.current = performance.now();
+          }
+        } else {
+          dangerLineStartRef.current = null;
+        }
+
+        const settledAboveLine = shapesAboveLine.filter(
+          (s) => s.locked || (Math.abs(s.vy) < 0.5 && Math.abs(s.vx) < 0.5)
+        );
+        const lineViolatedTooLong =
+          dangerLineStartRef.current !== null &&
+          performance.now() - dangerLineStartRef.current > 1200;
+
+        if (settledAboveLine.length >= 2 || lineViolatedTooLong) {
           setGameOver(true);
           const finalScore = scoreRef.current;
           setHighScore((prev) => {
@@ -408,6 +443,10 @@ export default function Game() {
     return () => {
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
+      }
+      if (dropCooldownTimeoutRef.current) {
+        clearTimeout(dropCooldownTimeoutRef.current);
+        dropCooldownTimeoutRef.current = null;
       }
       mergeTimeoutsRef.current.forEach(clearTimeout);
       mergeTimeoutsRef.current = [];
@@ -618,11 +657,14 @@ export default function Game() {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
             aspectRatio: `${GAME_WIDTH}/${GAME_HEIGHT}`,
+            touchAction: "none",
           }}
           onClick={handleCanvasClick}
           onMouseMove={handleMouseMove}
           onTouchMove={(e) => {
+            e.preventDefault();
             const touch = e.touches[0];
+            if (!touch || !canvasRef.current) return;
             const rect = canvasRef.current.getBoundingClientRect();
             const scaleX = GAME_WIDTH / rect.width;
             const x = (touch.clientX - rect.left) * scaleX;
@@ -634,6 +676,8 @@ export default function Game() {
             );
           }}
           onTouchEnd={(e) => {
+            e.preventDefault();
+            startAudio();
             const touch = e.changedTouches?.[0];
             if (!touch || !canvasRef.current) {
               dropShape(mouseX);
