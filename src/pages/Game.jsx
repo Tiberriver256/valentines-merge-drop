@@ -173,7 +173,7 @@ export default function Game() {
   const [mergeEffects, setMergeEffects] = useState([]);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(0.3);
+  const [musicVolume, setMusicVolume] = useState(0.1);
   const [sfxVolume, setSfxVolume] = useState(0.3);
   const shapesRef = useRef([]);
   const gameLoopRef = useRef(null);
