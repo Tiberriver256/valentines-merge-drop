@@ -3,77 +3,69 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw, Maximize, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const GAME_ASSET_BASE = `${import.meta.env.BASE_URL}assets/game`;
+
 // Shape sizes with your relationship photos - each level gets bigger!
 const SHAPES = [
   {
     radius: 15,
     color: "#FF69B4",
     glow: "#FF69B440",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/fe50d1e75_2023-05-0416.jpg",
+    image: `${GAME_ASSET_BASE}/couple-evening-selfie.jpg`,
   },
   {
     radius: 22,
     color: "#FFB6C1",
     glow: "#FFB6C140",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/e956307d7_2023-05-0417.jpg",
+    image: `${GAME_ASSET_BASE}/costume-party-flags-photo.jpg`,
   },
   {
     radius: 30,
     color: "#FF1493",
     glow: "#FF149340",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/6273ce60d_2023-05-042.jpg",
+    image: `${GAME_ASSET_BASE}/gingerbread-house-kiss.jpg`,
   },
   {
     radius: 40,
     color: "#C71585",
     glow: "#C7158540",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/6717e015a_2023-05-043.jpg",
+    image: `${GAME_ASSET_BASE}/young-couple-doorway-photo-1.jpg`,
   },
   {
     radius: 52,
     color: "#DB7093",
     glow: "#DB709340",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/672acafeb_2023-05-044.jpg",
+    image: `${GAME_ASSET_BASE}/m-go-blue-couple-photo.jpg`,
   },
   {
     radius: 66,
     color: "#FF6EB4",
     glow: "#FF6EB440",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/bd6e4897a_2023-05-045.jpg",
+    image: `${GAME_ASSET_BASE}/young-couple-striped-sweater.jpg`,
   },
   {
     radius: 82,
     color: "#DC143C",
     glow: "#DC143C40",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/38ab87f9f_2023-05-0411.jpg",
+    image: `${GAME_ASSET_BASE}/friends-wheelbarrow-game.jpg`,
   },
   {
     radius: 100,
     color: "#B22222",
     glow: "#B2222240",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/af448dd4b_PXL_20241205_115238708PORTRAIT.jpg",
+    image: `${GAME_ASSET_BASE}/bathroom-couple-selfie.jpg`,
   },
   {
     radius: 120,
     color: "#8B008B",
     glow: "#8B008B40",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/4f6d4ac99_8X2A0078.jpg",
+    image: `${GAME_ASSET_BASE}/couple-autumn-park-portrait.jpg`,
   },
   {
     radius: 145,
     color: "#FF0000",
     glow: "#FF000040",
-    image:
-      "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69906d8709560b09d91c306c/fa2d4cab7_NY5T-NAS7W0D5Q5WAJ9KS.jpg",
+    image: `${GAME_ASSET_BASE}/couple-brick-wall-date-night.jpg`,
   },
 ];
 
@@ -189,42 +181,44 @@ export default function Game() {
     // If both locked, do nothing
     if (a.locked && b.locked) return;
 
-    // Separate shapes - if one is locked, only move the unlocked one
-    const separation = overlap * 0.6;
-    if (a.locked) {
-      b.x += separation * 2 * nx;
-      b.y += separation * 2 * ny;
-    } else if (b.locked) {
-      a.x -= separation * 2 * nx;
-      a.y -= separation * 2 * ny;
-    } else {
-      a.x -= separation * nx;
-      a.y -= separation * ny;
-      b.x += separation * nx;
-      b.y += separation * ny;
+    // Separate shapes proportionally to inverse mass (locked shapes behave like infinite mass)
+    const invMassA = a.locked ? 0 : 1;
+    const invMassB = b.locked ? 0 : 1;
+    const totalInvMass = invMassA + invMassB;
+    if (totalInvMass === 0) return;
+
+    const correction = overlap / totalInvMass;
+    if (!a.locked) {
+      a.x -= correction * invMassA * nx;
+      a.y -= correction * invMassA * ny;
+    }
+    if (!b.locked) {
+      b.x += correction * invMassB * nx;
+      b.y += correction * invMassB * ny;
     }
 
     // Calculate relative velocity
-    const dvx = a.vx - b.vx;
-    const dvy = a.vy - b.vy;
-    const dvn = dvx * nx + dvy * ny;
+    const rvx = b.vx - a.vx;
+    const rvy = b.vy - a.vy;
+    const normalVelocity = rvx * nx + rvy * ny;
 
-    if (dvn > 0) return;
+    // No impulse if already separating along the collision normal
+    if (normalVelocity > 0) return;
 
     // Apply impulse - locked shapes don't get velocity
     const restitution = BOUNCE;
-    const j = (-(1 + restitution) * dvn) / 2;
+    const j = (-(1 + restitution) * normalVelocity) / totalInvMass;
 
     if (!a.locked) {
-      a.vx += j * nx * (b.locked ? 2 : 1);
-      a.vy += j * ny * (b.locked ? 2 : 1);
+      a.vx -= j * invMassA * nx;
+      a.vy -= j * invMassA * ny;
       a.vx *= 0.9;
       a.vy *= 0.9;
     }
 
     if (!b.locked) {
-      b.vx -= j * nx * (a.locked ? 2 : 1);
-      b.vy -= j * ny * (a.locked ? 2 : 1);
+      b.vx += j * invMassB * nx;
+      b.vy += j * invMassB * ny;
       b.vx *= 0.9;
       b.vy *= 0.9;
     }
@@ -308,7 +302,15 @@ export default function Game() {
             const dx = shape.x - other.x;
             const dy = shape.y - other.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            return dist < shape.radius + other.radius + 2 && shape.y < other.y;
+            if (dist === 0) return false;
+
+            const touching = dist < shape.radius + other.radius + 2;
+            const supportFromBelow = dy < 0 && -dy / dist > 0.6;
+            const otherIsStable =
+              other.locked ||
+              (Math.abs(other.vx) < 0.15 && Math.abs(other.vy) < 0.15);
+
+            return touching && supportFromBelow && otherIsStable;
           });
 
           if (isOnGround || isOnShape) {
@@ -316,6 +318,8 @@ export default function Game() {
           }
         }
       });
+
+      let shapesForChecks = currentShapes;
 
       // Process merges
       if (toMerge.length > 0) {
@@ -359,10 +363,11 @@ export default function Game() {
           });
         });
 
-        shapesRef.current = [
+        shapesForChecks = [
           ...currentShapes.filter((_, i) => !indicesToRemove.has(i)),
           ...newShapes,
         ];
+        shapesRef.current = shapesForChecks;
 
         setMergeEffects((prev) => [...prev, ...newEffects]);
         const timeoutId = setTimeout(() => {
@@ -374,8 +379,8 @@ export default function Game() {
       }
 
       // Check game over - if shapes cross the danger line and settle
-      if (currentShapes.length > 3) {
-        const shapesAboveLine = currentShapes.filter(
+      if (shapesForChecks.length > 3) {
+        const shapesAboveLine = shapesForChecks.filter(
           (s) =>
             s.y - s.radius < DANGER_LINE &&
             (s.locked || (Math.abs(s.vy) < 0.5 && Math.abs(s.vx) < 0.5))
@@ -395,7 +400,7 @@ export default function Game() {
         }
       }
 
-      setShapes([...shapesRef.current]);
+      setShapes([...shapesForChecks]);
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -425,7 +430,7 @@ export default function Game() {
     setNextShape(getRandomShape());
 
     // Setup audio (will play on first user interaction)
-    audioRef.current = new Audio("https://files.catbox.moe/hnu0ng.mp3");
+    audioRef.current = new Audio(`${GAME_ASSET_BASE}/background-music.mp3`);
     audioRef.current.loop = true;
     audioRef.current.volume = 0.3;
 
@@ -629,7 +634,16 @@ export default function Game() {
             );
           }}
           onTouchEnd={(e) => {
-            dropShape(mouseX);
+            const touch = e.changedTouches?.[0];
+            if (!touch || !canvasRef.current) {
+              dropShape(mouseX);
+              return;
+            }
+
+            const rect = canvasRef.current.getBoundingClientRect();
+            const scaleX = GAME_WIDTH / rect.width;
+            const x = (touch.clientX - rect.left) * scaleX;
+            dropShape(x);
           }}
         >
           {/* Danger Line */}
@@ -776,3 +790,6 @@ export default function Game() {
     </div>
   );
 }
+
+
+
