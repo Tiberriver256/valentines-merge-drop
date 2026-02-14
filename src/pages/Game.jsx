@@ -88,6 +88,7 @@ export default function Game() {
     }
   });
   const [gameOver, setGameOver] = useState(false);
+  const [currentShape, setCurrentShape] = useState(0);
   const [nextShape, setNextShape] = useState(0);
   const [shapes, setShapes] = useState([]);
   const [canDrop, setCanDrop] = useState(true);
@@ -124,6 +125,7 @@ export default function Game() {
     setShapes([]);
     setScore(0);
     setGameOver(false);
+    setCurrentShape(getRandomShape());
     setNextShape(getRandomShape());
     setCanDrop(true);
     setMergeEffects([]);
@@ -138,7 +140,7 @@ export default function Game() {
       if (now - lastDropRef.current < 500) return;
       lastDropRef.current = now;
 
-      const shape = SHAPES[nextShape];
+      const shape = SHAPES[currentShape];
       const clampedX = Math.max(
         shape.radius,
         Math.min(GAME_WIDTH - shape.radius, x)
@@ -150,7 +152,7 @@ export default function Game() {
         y: 50,
         vx: 0,
         vy: 0,
-        level: nextShape,
+        level: currentShape,
         radius: shape.radius,
         color: shape.color,
         glow: shape.glow,
@@ -158,6 +160,7 @@ export default function Game() {
       };
 
       shapesRef.current.push(newShape);
+      setCurrentShape(nextShape);
       setNextShape(getRandomShape());
       setCanDrop(false);
       if (dropCooldownTimeoutRef.current) {
@@ -168,7 +171,7 @@ export default function Game() {
         dropCooldownTimeoutRef.current = null;
       }, 500);
     },
-    [canDrop, gameOver, nextShape]
+    [canDrop, currentShape, gameOver, nextShape]
   );
 
   // Check collision between two circles
@@ -399,40 +402,39 @@ export default function Game() {
         mergeTimeoutsRef.current.push(timeoutId);
       }
 
-      // Check game over - if shapes cross the danger line and settle
-      if (shapesForChecks.length > 3) {
-        const shapesAboveLine = shapesForChecks.filter(
-          (s) => s.y - s.radius < DANGER_LINE
-        );
+      // Check game over when the stack breaches the danger line.
+      // Ignore newly dropped pieces near the top by requiring center >= line.
+      const dangerShapes = shapesForChecks.filter(
+        (s) => s.y - s.radius < DANGER_LINE && s.y >= DANGER_LINE
+      );
 
-        if (shapesAboveLine.length >= 2) {
-          if (dangerLineStartRef.current === null) {
-            dangerLineStartRef.current = performance.now();
+      if (dangerShapes.length >= 1) {
+        if (dangerLineStartRef.current === null) {
+          dangerLineStartRef.current = performance.now();
+        }
+      } else {
+        dangerLineStartRef.current = null;
+      }
+
+      const settledDangerShapes = dangerShapes.filter(
+        (s) => s.locked || (Math.abs(s.vy) < 0.5 && Math.abs(s.vx) < 0.5)
+      );
+      const lineViolatedTooLong =
+        dangerLineStartRef.current !== null &&
+        performance.now() - dangerLineStartRef.current > 1200;
+
+      if (settledDangerShapes.length >= 1 || lineViolatedTooLong) {
+        setGameOver(true);
+        const finalScore = scoreRef.current;
+        setHighScore((prev) => {
+          const newHigh = Math.max(prev, finalScore);
+          try {
+            localStorage.setItem("mergeGameHighScore", newHigh.toString());
+          } catch {
+            // localStorage unavailable
           }
-        } else {
-          dangerLineStartRef.current = null;
-        }
-
-        const settledAboveLine = shapesAboveLine.filter(
-          (s) => s.locked || (Math.abs(s.vy) < 0.5 && Math.abs(s.vx) < 0.5)
-        );
-        const lineViolatedTooLong =
-          dangerLineStartRef.current !== null &&
-          performance.now() - dangerLineStartRef.current > 1200;
-
-        if (settledAboveLine.length >= 2 || lineViolatedTooLong) {
-          setGameOver(true);
-          const finalScore = scoreRef.current;
-          setHighScore((prev) => {
-            const newHigh = Math.max(prev, finalScore);
-            try {
-              localStorage.setItem("mergeGameHighScore", newHigh.toString());
-            } catch {
-              // localStorage unavailable
-            }
-            return newHigh;
-          });
-        }
+          return newHigh;
+        });
       }
 
       setShapes([...shapesForChecks]);
@@ -466,6 +468,7 @@ export default function Game() {
       'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💕</text></svg>';
     document.getElementsByTagName("head")[0].appendChild(favicon);
 
+    setCurrentShape(getRandomShape());
     setNextShape(getRandomShape());
 
     // Setup audio (will play on first user interaction)
@@ -544,8 +547,8 @@ export default function Game() {
     const x = (e.clientX - rect.left) * scaleX;
     setMouseX(
       Math.max(
-        SHAPES[nextShape]?.radius || 20,
-        Math.min(GAME_WIDTH - (SHAPES[nextShape]?.radius || 20), x)
+        SHAPES[currentShape]?.radius || 20,
+        Math.min(GAME_WIDTH - (SHAPES[currentShape]?.radius || 20), x)
       )
     );
   };
@@ -670,8 +673,8 @@ export default function Game() {
             const x = (touch.clientX - rect.left) * scaleX;
             setMouseX(
               Math.max(
-                SHAPES[nextShape]?.radius || 20,
-                Math.min(GAME_WIDTH - (SHAPES[nextShape]?.radius || 20), x)
+                SHAPES[currentShape]?.radius || 20,
+                Math.min(GAME_WIDTH - (SHAPES[currentShape]?.radius || 20), x)
               )
             );
           }}
@@ -706,22 +709,23 @@ export default function Game() {
               <div
                 className="absolute top-12 rounded-full opacity-70 transition-all duration-75 border-2 border-pink-300/50"
                 style={{
-                  left: mouseX - (SHAPES[nextShape]?.radius || 20),
-                  width: (SHAPES[nextShape]?.radius || 20) * 2,
-                  height: (SHAPES[nextShape]?.radius || 20) * 2,
-                  backgroundImage: `url(${SHAPES[nextShape]?.image})`,
+                  left: mouseX - (SHAPES[currentShape]?.radius || 20),
+                  width: (SHAPES[currentShape]?.radius || 20) * 2,
+                  height: (SHAPES[currentShape]?.radius || 20) * 2,
+                  backgroundImage: `url(${SHAPES[currentShape]?.image})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
-                  boxShadow: `0 0 30px ${SHAPES[nextShape]?.glow}`,
+                  boxShadow: `0 0 30px ${SHAPES[currentShape]?.glow}`,
                 }}
               />
               <div
                 className="absolute opacity-20"
                 style={{
                   left: mouseX - 1,
-                  top: 50 + (SHAPES[nextShape]?.radius || 20),
+                  top: 50 + (SHAPES[currentShape]?.radius || 20),
                   width: 2,
-                  height: GAME_HEIGHT - 50 - (SHAPES[nextShape]?.radius || 20),
+                  height:
+                    GAME_HEIGHT - 50 - (SHAPES[currentShape]?.radius || 20),
                   background: `linear-gradient(to bottom, #FF69B4, transparent)`,
                 }}
               />
