@@ -9,10 +9,18 @@ import {
 } from "@/components/ui/toast";
 
 export function Toaster() {
-  const { toasts } = useToast();
+  const { toasts, dismiss } = useToast();
 
   return (
     <ToastProvider>
+      {toasts.length > 0 && (
+        <button
+          type="button"
+          aria-label="Dismiss notifications"
+          className="fixed inset-0 z-[90] cursor-default bg-transparent"
+          onClick={() => dismiss()}
+        />
+      )}
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
@@ -23,7 +31,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose onClick={() => dismiss(id)} />
           </Toast>
         );
       })}
