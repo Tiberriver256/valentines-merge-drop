@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, Maximize, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/components/ui/use-toast";
 
 const GAME_ASSET_BASE = `${import.meta.env.BASE_URL}assets/game`;
 const DROP_SOUND_FILES = [
   "drop-soft-01.m4a",
   "drop-soft-02.m4a",
   "drop-soft-03.m4a",
-  "drop-soft-04.m4a",
 ];
 const DROP_SOUND_PATHS = DROP_SOUND_FILES.map(
   (file) => `${import.meta.env.BASE_URL}audio/drops/${file}`
@@ -105,7 +105,8 @@ export default function Game() {
   const [mergeEffects, setMergeEffects] = useState([]);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(0.3);
+  const [sfxVolume, setSfxVolume] = useState(0.3);
   const shapesRef = useRef([]);
   const gameLoopRef = useRef(null);
   const lastDropRef = useRef(0);
@@ -116,6 +117,7 @@ export default function Game() {
   const dropCooldownTimeoutRef = useRef(null);
   const scoreRef = useRef(0);
   const dangerLineStartRef = useRef(null);
+  const { toast } = useToast();
 
   // Generate next shape (only first 4 types can spawn)
   const getRandomShape = () => Math.floor(Math.random() * 4);
@@ -142,12 +144,12 @@ export default function Game() {
   }, []);
 
   const playDropSound = useCallback(() => {
-    if (isMuted || dropSoundsRef.current.length === 0) return;
+    if (sfxVolume <= 0 || dropSoundsRef.current.length === 0) return;
     const idx = Math.floor(Math.random() * dropSoundsRef.current.length);
     const sound = dropSoundsRef.current[idx].cloneNode();
-    sound.volume = 0.7;
+    sound.volume = sfxVolume;
     sound.play().catch(() => {});
-  }, [isMuted]);
+  }, [sfxVolume]);
 
   // Drop shape
   const dropShape = useCallback(
@@ -493,7 +495,7 @@ export default function Game() {
     // Setup audio (will play on first user interaction)
     audioRef.current = new Audio(`${GAME_ASSET_BASE}/background-music.mp3`);
     audioRef.current.loop = true;
-    audioRef.current.volume = 0.3;
+    audioRef.current.volume = musicVolume;
     dropSoundsRef.current = DROP_SOUND_PATHS.map((src) => {
       const sound = new Audio(src);
       sound.preload = "auto";
@@ -520,6 +522,18 @@ export default function Game() {
       dropSoundsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.volume = musicVolume;
+    if (musicVolume <= 0) {
+      audioRef.current.pause();
+      return;
+    }
+    if (audioStartedRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+  }, [musicVolume]);
 
   // Start audio on first interaction
   const startAudio = () => {
@@ -549,16 +563,39 @@ export default function Game() {
     setShowFullscreenPrompt(false);
   };
 
-  // Toggle mute
-  const toggleMute = () => {
-    if (audioRef.current) {
-      if (isMuted) {
-        audioRef.current.play().catch(() => {});
-      } else {
-        audioRef.current.pause();
-      }
-      setIsMuted(!isMuted);
-    }
+  // Open volume controls
+  const openVolumeControls = () => {
+    toast({
+      title: "Audio Mix",
+      description: (
+        <div className="mt-2 space-y-3">
+          <label className="block text-xs text-white/80">
+            Background Music
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={Math.round(musicVolume * 100)}
+              onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+              className="mt-2 w-full"
+            />
+          </label>
+          <label className="block text-xs text-white/80">
+            Sound Effects
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={Math.round(sfxVolume * 100)}
+              onChange={(e) => setSfxVolume(Number(e.target.value) / 100)}
+              className="mt-2 w-full"
+            />
+          </label>
+        </div>
+      ),
+    });
   };
 
   // Handle mouse/touch
@@ -644,10 +681,10 @@ export default function Game() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleMute}
+              onClick={openVolumeControls}
               className="text-white/60 hover:text-white hover:bg-white/10"
             >
-              {isMuted ? (
+              {musicVolume <= 0 && sfxVolume <= 0 ? (
                 <VolumeX className="w-5 h-5" />
               ) : (
                 <Volume2 className="w-5 h-5" />
