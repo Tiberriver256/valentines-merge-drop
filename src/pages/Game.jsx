@@ -625,7 +625,7 @@ export default function Game() {
       } else if (elem.msRequestFullscreen) {
         await elem.msRequestFullscreen();
       }
-    } catch (err) {
+    } catch {
       console.log("Fullscreen not supported or denied");
     }
     setShowFullscreenPrompt(false);
@@ -646,12 +646,36 @@ export default function Game() {
     });
   };
 
+  const isInteractiveControlEvent = (target) => {
+    if (!(target instanceof Element)) return false;
+    return !!target.closest(
+      "button, [role='button'], input, select, textarea, a"
+    );
+  };
+
   // Handle mouse/touch
   const handleCanvasClick = (e) => {
+    if (isInteractiveControlEvent(e.target)) return;
     startAudio();
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = GAME_WIDTH / rect.width;
     const x = (e.clientX - rect.left) * scaleX;
+    dropShape(x);
+  };
+
+  const handleCanvasTouchEnd = (e) => {
+    if (isInteractiveControlEvent(e.target)) return;
+    e.preventDefault();
+    startAudio();
+    const touch = e.changedTouches?.[0];
+    if (!touch || !canvasRef.current) {
+      dropShape(mouseX);
+      return;
+    }
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = GAME_WIDTH / rect.width;
+    const x = (touch.clientX - rect.left) * scaleX;
     dropShape(x);
   };
 
@@ -792,20 +816,7 @@ export default function Game() {
               )
             );
           }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            startAudio();
-            const touch = e.changedTouches?.[0];
-            if (!touch || !canvasRef.current) {
-              dropShape(mouseX);
-              return;
-            }
-
-            const rect = canvasRef.current.getBoundingClientRect();
-            const scaleX = GAME_WIDTH / rect.width;
-            const x = (touch.clientX - rect.left) * scaleX;
-            dropShape(x);
-          }}
+          onTouchEnd={handleCanvasTouchEnd}
         >
           {/* Danger Line */}
           <div
@@ -913,7 +924,15 @@ export default function Game() {
                     </p>
                   )}
                   <Button
-                    onClick={resetGame}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetGame();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      resetGame();
+                    }}
                     className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white px-8 py-6 rounded-2xl text-lg font-semibold shadow-lg shadow-pink-500/30"
                   >
                     <RotateCcw className="w-5 h-5 mr-2" />
@@ -952,6 +971,4 @@ export default function Game() {
     </div>
   );
 }
-
-
 
